@@ -9,6 +9,7 @@ from torch.utils.data import Dataset, DataLoader
 import cv2
 import os
 from sklearn.model_selection import train_test_split
+import re
 
 
 
@@ -54,25 +55,29 @@ class JHMDB(torch.utils.data.Dataset):
         if os.path.isfile(meanstd_file):
             meanstd = torch.load(meanstd_file)
         else:
-            mean = torch.zeros(3)
-            std = torch.zeros(3)
+            #mean = torch.zeros(3)
+            #std = torch.zeros(3)
+            mean = np.zeros(3)
+            std = np.zeros(3)
+            cnt = 0
             for videos in self.data['video']:
                 for img in videos:
                     # CxHxW
-                    print(img)
-                    print(np.reshape(img, (img.shape(0), -1)))
-                    mean += np.reshape(img, (img.shape(0), -1)).mean(1)
-                    std += np.reshape(img, (img.shape(0), -1)).std(1)
-            mean /= len(self.train)
-            std /= len(self.train)
+                    mean += np.reshape(img, (-1, img.shape[-1])).mean(0)
+                    std += np.reshape(img, (-1, img.shape[-1])).std(0) 
+                    cnt += 1
+            mean /= cnt
+            std /= cnt
+            mean = torch.FloatTensor(mean)
+            std = torch.FloatTensor(std)
             meanstd = {
                 'mean': mean,
                 'std': std,
                 }
             torch.save(meanstd, meanstd_file)
-        if self.is_train:
-            print('    Mean: %.4f, %.4f, %.4f' % (meanstd['mean'][0], meanstd['mean'][1], meanstd['mean'][2]))
-            print('    Std:  %.4f, %.4f, %.4f' % (meanstd['std'][0], meanstd['std'][1], meanstd['std'][2]))
+            
+        print('    Mean: %.4f, %.4f, %.4f' % (meanstd['mean'][0], meanstd['mean'][1], meanstd['mean'][2]))
+        print('    Std:  %.4f, %.4f, %.4f' % (meanstd['std'][0], meanstd['std'][1], meanstd['std'][2]))
             
         return meanstd['mean'], meanstd['std']
     
@@ -82,21 +87,35 @@ class JHMDB(torch.utils.data.Dataset):
         # mask (112, 112, F)
         # pose (2, 15, F)
         # scale (F)
-        # randomly select 15 consecutive frames (F = 15)
+        
         frame_num = self.data['mask'][index].shape[2]
         F = 15
-        start_frame = np.random.randint(0, high=frame_num-F+1)
+        # randomly select 15 consecutive frames (F = 15)
+        #start_frame = np.random.randint(0, high=frame_num-F+1)
+        #pose_data = torch.from_numpy(self.data['pose'][index][:,:,start_frame:start_frame+F].astype('float'))
+        
+        # OR randomly select 15 frames
+        frame_shuffle=list(range(frame_num))
+        shuffle(frame_shuffle)
+        selected_frame=sorted(frame_shuffle[0:F])
+        pose_data = torch.from_numpy(self.data['pose'][index][:,:,selected_frame].astype('float'))
+        
         
         # change pose position according to resize
-        pose_data = torch.from_numpy(self.data['pose'][index][:,:,start_frame:start_frame+F].astype('float'))
-        pose_data[0,:,:] = pose_data[0,:,:] * 112 / 240
-        pose_data[1,:,:] = pose_data[1,:,:] * 112 / 320
+        pose_data[0,:,:] = pose_data[0,:,:] * 224 / 240
+        pose_data[1,:,:] = pose_data[1,:,:] * 224 / 320
         
-        return torch.from_numpy(np.array(self.data['video'][index][start_frame:start_frame+F])).int(), \
+        #return torch.from_numpy(np.array(self.data['video'][index][start_frame:start_frame+F])).int(), \
+        #    torch.LongTensor([self.classdict[self.data['label'][index]]]), \
+        #    torch.from_numpy(self.data['mask'][index][:,:,start_frame:start_frame+F].astype('float')), \
+        #    pose_data, \
+        #    torch.from_numpy(self.data['scale'][index][start_frame:start_frame+F].astype('float'))
+
+        return torch.from_numpy(np.array(self.data['video'][index])[selected_frame]).int(), \
             torch.LongTensor([self.classdict[self.data['label'][index]]]), \
-            torch.from_numpy(self.data['mask'][index][:,:,start_frame:start_frame+F].astype('float')), \
+            torch.from_numpy(self.data['mask'][index][:,:,selected_frame].astype('float')), \
             pose_data, \
-            torch.from_numpy(self.data['scale'][index][start_frame:start_frame+F].astype('float'))
+            torch.from_numpy(self.data['scale'][index][selected_frame].astype('float'))
         
     def __len__(self):
         return len(self.data['scale'])
@@ -126,6 +145,18 @@ for root, dirs, files in os.walk(pose_rootdir):
         if file[0].startswith(".") or root.endswith('.AppleDouble'):
             continue
         pose_pathes.append(os.path.join(root, file))    
+
+video_pathes = sorted(video_pathes)
+mask_pathes = sorted(mask_pathes)
+pose_pathes = sorted(pose_pathes)
+
+video_list = [re.findall(r"[\w_]+\d+", x)[0] for x in video_pathes]
+mask_list = [re.findall(r"[\w_]+\d+", x)[0] for x in mask_pathes]
+pose_list = [re.findall(r"[\w_]+\d+", x)[0] for x in pose_pathes]
+
+# make sure every thing matches
+for x, y, z in zip(video_list, mask_list, pose_list):
+    assert (x == y) and (x == z)
 
 video_pathes_train, video_pathes_valid, mask_pathes_train, mask_pathes_valid, pose_pathes_train, pose_pathes_valid = \
     train_test_split(video_pathes, mask_pathes, pose_pathes, test_size=0.01)

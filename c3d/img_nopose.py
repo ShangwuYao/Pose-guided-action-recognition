@@ -323,13 +323,16 @@ class LSTMModel(torch.nn.Module):
         if torch.cuda.is_available():
             self.cuda()
 
-    def adjust_lr(self, epoch):
+    def _adjust_lr(self, epoch):
         lr = self.args.init_lr * (0.1 ** (epoch // self.k))
         lr = max(1e-5, lr)
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = lr
 
         print("----------adjusting learning rate: {}----------".format(lr))
+
+    def adjust_lr(self, lr):
+        self.args.init_lr = lr
 
     def forward(self, input_features):
         start_time = time.time()
@@ -371,7 +374,7 @@ class LSTMModel(torch.nn.Module):
             start_time = time.time()
             self.train()
 
-            self.adjust_lr(i)
+            self._adjust_lr(i)
 
             losses = 0
             total_cnt = 0
@@ -605,7 +608,7 @@ args = namedtuple('args',
                           'cuda'])(
         5,
         'output/',
-        40,
+        10,
         0,
         1e-4,
         7,
@@ -619,6 +622,8 @@ model = LSTMModel(args, train_loader, valid_loader)
 
 print("--training")
 model.model_train(freeze=True, use_mask=True, use_pose=False)
+
+model.adjust_lr(1e-5)
 
 #model_param_str = 'att_img_nopose_epoch_8_loss_0.0890108197927475_valloss_0.7626314704062693'
 #model.load_state_dict(torch.load(model_param_str + ".t7"))

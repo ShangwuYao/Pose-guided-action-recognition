@@ -417,13 +417,16 @@ class LSTMModel(torch.nn.Module):
         if torch.cuda.is_available():
             self.cuda()
 
-    def adjust_lr(self, epoch):
+    def _adjust_lr(self, epoch):
         lr = self.args.init_lr * (0.1 ** (epoch // self.k))
         lr = max(1e-5, lr)
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = lr
 
         print("----------adjusting learning rate: {}----------".format(lr))
+
+    def adjust_lr(self, lr):
+        self.args.init_lr = lr
 
     def forward(self, input_features, pose_heatmaps):
         start_time = time.time()
@@ -468,7 +471,7 @@ class LSTMModel(torch.nn.Module):
             start_time = time.time()
             self.train()
 
-            self.adjust_lr(i)
+            self._adjust_lr(i)
 
             losses = 0
             total_cnt = 0
@@ -680,7 +683,7 @@ for x, y, z in zip(video_list, mask_list, pose_list):
     assert (x == y) and (x == z)
 
 video_pathes_train, video_pathes_valid, mask_pathes_train, mask_pathes_valid, pose_pathes_train, pose_pathes_valid = \
-    train_test_split(video_pathes, mask_pathes, pose_pathes, test_size=0.15, random_state=42)
+    train_test_split(video_pathes, mask_pathes, pose_pathes, test_size=0.3, random_state=42)
 class_names=[name for name in os.listdir(video_rootdir) if not name.startswith(".")]
 
 
@@ -709,7 +712,7 @@ args = namedtuple('args',
                           'cuda'])(
         5,
         'output/',
-        40,
+        10,
         0,
         1e-4,
         7,
@@ -722,6 +725,8 @@ model = LSTMModel(args, train_loader, valid_loader)
 #model.evaluate()
 print("--training")
 model.model_train(freeze=True, use_mask=False)
+
+model.adjust_lr(1e-5)
 
 #model_param_str = 'att_img_nopose_epoch_8_loss_0.0890108197927475_valloss_0.7626314704062693'
 #model.load_state_dict(torch.load(model_param_str + ".t7"))

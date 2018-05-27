@@ -1,4 +1,4 @@
-# c3d-pose-hard-attention
+# pose-guided-action-recognition-pytorch
 
 This is a work on exploring the use of human pose information in helping action recognition. For complete report, check [here](https://drive.google.com/file/d/1slIjLgRIqRsZwTR9ohVr61Y7OR2oFGdO/view?usp=sharing).
 

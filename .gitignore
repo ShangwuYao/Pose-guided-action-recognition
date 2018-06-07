@@ -1,4 +1,6 @@
 *.avi
+*.txt
+src/joint_positions/
 *.mat
 *.ipynb
 *.tar

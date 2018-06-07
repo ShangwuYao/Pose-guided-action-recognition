@@ -2,3 +2,5 @@
 *.mat
 *.ipynb
 *.tar
+*.DS_Store
+/.DS_Store/
